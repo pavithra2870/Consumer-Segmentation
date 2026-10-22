@@ -11,7 +11,6 @@ import joblib
 from config import settings
 from utils.logger import logger
 
-PROTECTED_ATTRIBUTES = ["gender", "income_bracket", "city_tier"]
 ADVERSE_IMPACT_THRESHOLD = 0.80  # 80% rule (EEOC guideline)
 PARITY_THRESHOLD = 0.10  # 10pp demographic parity gap
 
@@ -31,9 +30,14 @@ def _adverse_impact_ratio(rates: dict) -> dict:
     return {group: round(rate / max_rate, 4) if max_rate > 0 else 1.0 for group, rate in rates.items()}
 
 
-def _compute_fairness_metrics(df: pd.DataFrame, prediction_col: str, label: str) -> list[dict]:
+def _top_rate_flag(scores: pd.Series, rate: float) -> pd.Series:
+    """Flag the highest-scoring `rate` share of customers, so imbalanced tasks get a usable binary decision."""
+    return (scores >= scores.quantile(1 - rate)).astype(int)
+
+
+def _compute_fairness_metrics(df: pd.DataFrame, prediction_col: str, label: str, attributes: list[str]) -> list[dict]:
     metrics = []
-    for attr in PROTECTED_ATTRIBUTES:
+    for attr in attributes:
         if attr not in df.columns:
             continue
         rates = _positive_rate_by_group(df, attr, prediction_col)
@@ -58,9 +62,9 @@ def _compute_fairness_metrics(df: pd.DataFrame, prediction_col: str, label: str)
     return metrics
 
 
-def _distribution_by_group(df: pd.DataFrame) -> dict:
+def _distribution_by_group(df: pd.DataFrame, attributes: list[str]) -> dict:
     dist = {}
-    for attr in PROTECTED_ATTRIBUTES:
+    for attr in attributes:
         if attr not in df.columns:
             continue
         counts = df[attr].value_counts().to_dict()
@@ -75,32 +79,24 @@ def generate_bias_report(df: pd.DataFrame) -> dict:
     """
     logger.info("Generating bias and fairness report...")
 
+    from services.datasets import get_spec
+    spec = get_spec()
+    attributes = spec.protected
     models_path = settings.models_path
     df = df.copy()
 
-    # Generate predictions for bias analysis
-    try:
-        churn_model = joblib.load(models_path / "churn_model.pkl")
-        churn_feats = joblib.load(models_path / "churn_features.pkl")
-        avail = [f for f in churn_feats if f in df.columns]
-        df["pred_churn"] = churn_model.predict_proba(df[avail].fillna(0))[:, 1]
-        df["pred_churn_binary"] = (df["pred_churn"] >= 0.5).astype(int)
-    except Exception as e:
-        logger.warning(f"Could not load churn model for bias analysis: {e}")
-        df["pred_churn_binary"] = df.get("is_churned", 0)
-
-    try:
-        conv_model = joblib.load(models_path / "conversion_model.pkl")
-        conv_feats = joblib.load(models_path / "conversion_features.pkl")
-        avail = [f for f in conv_feats if f in df.columns]
-        df["pred_converted_binary"] = conv_model.predict(df[avail].fillna(0))
-    except Exception as e:
-        logger.warning(f"Could not load conversion model for bias analysis: {e}")
-        df["pred_converted_binary"] = df.get("converted", 0)
-
-    churn_metrics = _compute_fairness_metrics(df, "pred_churn_binary", "churn")
-    conv_metrics = _compute_fairness_metrics(df, "pred_converted_binary", "conversion")
-    all_metrics = churn_metrics + conv_metrics
+    # Flag the top-scoring share of customers (matching each task's base rate) as positive
+    all_metrics = []
+    for task, target, col in (("churn", "is_churned", "pred_churn_binary"),
+                              ("conversion", "converted", "pred_converted_binary")):
+        if task not in spec.tasks:
+            continue
+        model = joblib.load(models_path / f"{task}_model.pkl")
+        feats = joblib.load(models_path / f"{task}_features.pkl")
+        avail = [f for f in feats if f in df.columns]
+        scores = pd.Series(model.predict_proba(df[avail].fillna(0))[:, 1], index=df.index)
+        df[col] = _top_rate_flag(scores, float(df[target].mean()))
+        all_metrics += _compute_fairness_metrics(df, col, task, attributes)
 
     flagged_count = sum(1 for m in all_metrics if m["flagged"])
     overall_flag = flagged_count > 0
@@ -119,7 +115,7 @@ def generate_bias_report(df: pd.DataFrame) -> dict:
         summary_lines.append("All demographic groups pass the 80% adverse impact rule and parity threshold.")
 
     recommendations = _build_recommendations(all_metrics)
-    dist = _distribution_by_group(df)
+    dist = _distribution_by_group(df, attributes)
 
     return {
         "overall_flag": overall_flag,
@@ -153,6 +149,12 @@ def _build_recommendations(metrics: list[dict]) -> list[str]:
         recs.append(
             "Geographic tier disparity detected. Review whether city_tier features introduce "
             "systemic disadvantage — consider geographic stratification in training splits."
+        )
+    other = attrs_flagged - {"income_bracket", "gender", "city_tier"}
+    if other:
+        recs.append(
+            f"Disparity detected across {', '.join(sorted(other))}. Check whether correlated features act as "
+            "proxies for these groups and consider fairness constraints or reweighting during retraining."
         )
     if "churn" in preds_flagged:
         recs.append(

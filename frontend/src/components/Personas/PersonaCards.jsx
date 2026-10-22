@@ -17,6 +17,7 @@ export default function PersonaCards() {
   const [expanded, setExpanded] = useState(null)
 
   const personas = data?.personas ?? []
+  const meta = data?.meta
 
   return (
     <>
@@ -39,6 +40,7 @@ export default function PersonaCards() {
             <PersonaCard
               key={p.segment_id}
               persona={p}
+              meta={meta}
               color={SEGMENT_COLORS[p.segment_id % SEGMENT_COLORS.length]}
               avatarBg={AVATAR_BG[p.segment_id % AVATAR_BG.length]}
               expanded={expanded === p.segment_id}
@@ -51,7 +53,8 @@ export default function PersonaCards() {
   )
 }
 
-function PersonaCard({ persona, color, avatarBg, expanded, onToggle }) {
+function PersonaCard({ persona, meta, color, avatarBg, expanded, onToggle }) {
+  const [statLabel, statValue] = Object.entries(persona.stats ?? {})[0] ?? ['', '']
   const churnBadge = persona.behaviors.churn_risk_pct > 50 ? 'badge-red'
     : persona.behaviors.churn_risk_pct > 30 ? 'badge-yellow' : 'badge-green'
 
@@ -72,7 +75,7 @@ function PersonaCard({ persona, color, avatarBg, expanded, onToggle }) {
                 Segment {persona.segment_id}
               </span>
               <span className={`badge ${churnBadge}`} style={{ fontSize: 10 }}>
-                {persona.behaviors.churn_risk_pct}% churn
+                {persona.behaviors.churn_risk_pct}% {meta?.risk_kind === 'conversion' ? 'convert' : 'churn'}
               </span>
             </div>
           </div>
@@ -84,13 +87,13 @@ function PersonaCard({ persona, color, avatarBg, expanded, onToggle }) {
         <div className="persona-metrics">
           <div className="persona-metric">
             <div className="persona-metric-value" style={{ color }}>
-              ${Number(persona.behaviors.avg_ltv).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              {meta?.value_prefix ?? '$'}{Number(persona.behaviors.avg_ltv).toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
-            <div className="persona-metric-label">Avg LTV</div>
+            <div className="persona-metric-label">{meta?.value_label ?? 'Avg LTV'}</div>
           </div>
           <div className="persona-metric">
-            <div className="persona-metric-value">{persona.behaviors.avg_nps}</div>
-            <div className="persona-metric-label">NPS Score</div>
+            <div className="persona-metric-value">{statValue}</div>
+            <div className="persona-metric-label">{statLabel}</div>
           </div>
           <div className="persona-metric">
             <div className="persona-metric-value">{persona.demographics.segment_size?.toLocaleString()}</div>

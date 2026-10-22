@@ -9,10 +9,13 @@ import ExplainPanel from './components/Explainability/ExplainPanel'
 import BiasReport from './components/Bias/BiasReport'
 import WhatIfTool from './components/Simulation/WhatIfTool'
 import Pipeline from './components/Pipeline/Pipeline'
+import Benchmarks from './components/Benchmarks/Benchmarks'
 import { api } from './services/api'
+import { useDataset } from './hooks/DatasetContext'
 
 export default function App() {
   const [health, setHealth] = useState(null)
+  const { dataset } = useDataset()
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -26,12 +29,12 @@ export default function App() {
     fetchHealth()
     const interval = setInterval(fetchHealth, 15000)
     return () => clearInterval(interval)
-  }, [])
+  }, [dataset])
 
   return (
     <div className="app-layout">
       <Sidebar health={health} />
-      <main className="main-content">
+      <main className="main-content" key={dataset}>
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/segments" element={<SegmentExplorer />} />
@@ -40,6 +43,7 @@ export default function App() {
           <Route path="/explainability" element={<ExplainPanel />} />
           <Route path="/bias" element={<BiasReport />} />
           <Route path="/simulation" element={<WhatIfTool />} />
+          <Route path="/benchmarks" element={<Benchmarks />} />
           <Route path="/pipeline" element={<Pipeline />} />
         </Routes>
       </main>

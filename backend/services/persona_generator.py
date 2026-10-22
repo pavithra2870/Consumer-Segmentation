@@ -26,18 +26,15 @@ Respond ONLY with a valid JSON object with these keys:
 No markdown. No explanation. Only the JSON object."""
 
 
-def _build_persona_prompt(segment_id: int, stats: dict) -> str:
-    return f"""Segment {segment_id} statistics:
-- Average LTV: ${stats.get('avg_ltv', 0):.0f}
-- Churn Risk: {stats.get('avg_churn_risk', 0)*100:.1f}%
-- Avg Total Spend: ${stats.get('avg_total_spend', 0):.0f}
-- Avg Purchase Frequency (monthly): {stats.get('avg_purchase_frequency', 0):.1f}
-- Avg NPS Score: {stats.get('avg_nps', 0):.1f}/10
-- Avg Session Count (30d): {stats.get('avg_sessions', 0):.0f}
-- Avg Age: {stats.get('avg_age', 35):.0f}
-- Top Income Bracket: {stats.get('top_income', 'medium')}
-- Top Subscription: {stats.get('top_subscription', 'basic')}
-- Segment Label: {stats.get('label', f'Segment {segment_id}')}
+def _build_persona_prompt(segment_id: int, label: str, spec, value: float, risk: float,
+                          stats: dict, cats: dict) -> str:
+    lines = [f"- {spec.value_label}: {spec.value_prefix}{value:,.0f}",
+             f"- {spec.risk_label}: {risk * 100:.1f}%"]
+    lines += [f"- {k}: {v:,.1f}" for k, v in stats.items()]
+    lines += [f"- {k}: {v}" for k, v in cats.items()]
+    return f"""Segment {segment_id} statistics ({spec.label}):
+{chr(10).join(lines)}
+- Segment Label: {label}
 
 Generate the persona JSON."""
 
@@ -123,28 +120,21 @@ async def generate_personas(segmentation_result: dict, df: pd.DataFrame) -> list
 
     personas = []
 
+    from services.datasets import get_spec
+    spec = get_spec()
+
     for seg_info in segmentation_result["segments"]:
         sid = seg_info["segment_id"]
-        mask = df["segment"] == sid
-        subset = df[mask]
+        subset = df[df["segment"] == sid]
 
-        stats = {
-            "label": seg_info["label"],
-            "avg_ltv": seg_info["avg_ltv"],
-            "avg_churn_risk": seg_info["avg_churn_risk"],
-            "avg_total_spend": float(subset["total_spend"].mean()) if "total_spend" in subset else 0,
-            "avg_purchase_frequency": float(subset["purchase_frequency_monthly"].mean()) if "purchase_frequency_monthly" in subset else 0,
-            "avg_nps": float(subset["nps_score"].mean()) if "nps_score" in subset else 5.0,
-            "avg_sessions": float(subset["session_count_30d"].mean()) if "session_count_30d" in subset else 0,
-            "avg_age": float(subset["age"].mean()) if "age" in subset else 35,
-            "top_income": subset["income_bracket"].mode()[0] if "income_bracket" in subset and len(subset) else "medium",
-            "top_subscription": subset["subscription_type"].mode()[0] if "subscription_type" in subset and len(subset) else "basic",
-        }
+        stats = {label: float(subset[col].mean()) for col, label in spec.stat_cols if col in subset}
+        cats = {label: str(subset[col].mode()[0]) for col, label in spec.cat_cols if col in subset and len(subset)}
 
         fallback = FALLBACK_PERSONAS[sid % len(FALLBACK_PERSONAS)].copy()
 
         if available:
-            prompt = _build_persona_prompt(sid, stats)
+            prompt = _build_persona_prompt(sid, seg_info["label"], spec, seg_info["avg_ltv"],
+                                           seg_info["avg_churn_risk"], stats, cats)
             response = await ollama.generate(prompt, system=PERSONA_SYSTEM_PROMPT)
             persona_data = _parse_ollama_response(response, sid, fallback)
         else:
@@ -154,19 +144,12 @@ async def generate_personas(segmentation_result: dict, df: pd.DataFrame) -> list
             "segment_id": sid,
             "name": persona_data.get("name", fallback["name"]),
             "tagline": persona_data.get("tagline", fallback["tagline"]),
-            "demographics": {
-                "avg_age": round(stats["avg_age"], 0),
-                "top_income": stats["top_income"],
-                "top_subscription": stats["top_subscription"],
-                "segment_size": seg_info["size"],
-            },
+            "demographics": {"segment_size": seg_info["size"], **cats},
             "behaviors": {
-                "avg_ltv": stats["avg_ltv"],
-                "avg_spend": round(stats["avg_total_spend"], 2),
-                "avg_frequency": round(stats["avg_purchase_frequency"], 2),
-                "avg_nps": round(stats["avg_nps"], 1),
-                "churn_risk_pct": round(stats["avg_churn_risk"] * 100, 1),
+                "avg_ltv": seg_info["avg_ltv"],
+                "churn_risk_pct": round(seg_info["avg_churn_risk"] * 100, 1),
             },
+            "stats": {k: round(v, 2) for k, v in stats.items()},
             "motivations": persona_data.get("motivations", fallback["motivations"]),
             "pain_points": persona_data.get("pain_points", fallback["pain_points"]),
             "recommended_actions": persona_data.get("recommended_actions", fallback["recommended_actions"]),

@@ -41,17 +41,25 @@ export default function Overview() {
     ? (segments.segments.reduce((s, x) => s + x.avg_ltv * x.size, 0) / (totalCustomers || 1)).toFixed(0)
     : '--'
   const nSegments = segments?.n_clusters ?? '--'
+  const meta = segments?.meta ?? predictions?.meta
+  const valueLabel = meta?.value_label ?? 'Avg Customer LTV'
+  const valuePrefix = meta?.value_prefix ?? '$'
+  const riskLabel = meta?.risk_label ?? 'Churn Risk'
+  const riskKind = meta?.risk_kind ?? 'churn'
+  // The headline model is churn when the dataset has one, otherwise conversion
+  const headline = predictions?.churn ?? predictions?.conversion
+  const headlineName = predictions?.churn ? 'Churn' : 'Conversion'
 
   const segmentPieData = segments?.segments?.map(s => ({
     name: s.label,
     value: s.size,
   })) ?? []
 
-  const churnDist = predictions?.churn?.distribution ?? []
+  const churnDist = headline?.distribution ?? []
   const ltvDist = predictions?.ltv?.distribution?.slice(0, 15) ?? []
 
-  const featureImportance = predictions?.churn?.feature_importance
-    ? Object.entries(predictions.churn.feature_importance).map(([k, v]) => ({ feature: k.replace(/_/g,' '), importance: +(v*100).toFixed(2) }))
+  const featureImportance = headline?.feature_importance
+    ? Object.entries(headline.feature_importance).map(([k, v]) => ({ feature: k.replace(/_/g,' '), importance: +(v*100).toFixed(2) }))
     : []
 
   return (
@@ -65,12 +73,12 @@ export default function Overview() {
         <div className="kpi-grid">
           <KPICard label="Total Customers" value={totalCustomers.toLocaleString()} delta={null} color="" />
           <KPICard label="Segments" value={nSegments} delta={null} color="accent-blue" />
-          <KPICard label="Avg Churn Risk" value={`${avgChurn}%`} delta="Predicted" color="accent-red" />
-          <KPICard label="Avg Customer LTV" value={`$${Number(avgLtv).toLocaleString()}`} delta="Estimated" color="accent-green" />
+          <KPICard label={`Avg ${riskLabel}`} value={`${avgChurn}%`} delta="Observed" color="accent-red" />
+          <KPICard label={valueLabel} value={`${valuePrefix}${Number(avgLtv).toLocaleString()}`} delta="Per customer" color="accent-green" />
           <KPICard label="Silhouette Score" value={segments?.silhouette_score?.toFixed(3) ?? '--'} delta="Clustering quality" color="accent-yellow" />
           <KPICard
-            label="Churn Model AUC"
-            value={predictions?.churn?.auc ? predictions.churn.auc.toFixed(3) : (predictions?.churn?.accuracy ? predictions.churn.accuracy.toFixed(3) : '--')}
+            label={`${headlineName} Model AUC`}
+            value={headline?.auc ? headline.auc.toFixed(3) : '--'}
             delta="Classification"
             color="accent-purple"
           />
@@ -101,16 +109,16 @@ export default function Overview() {
           <div className="card">
             <div className="card-header">
               <div>
-                <div className="card-title">Churn Probability Distribution</div>
-                <div className="card-subtitle">Predicted churn score histogram</div>
+                <div className="card-title">{headlineName} Probability Distribution</div>
+                <div className="card-subtitle">Predicted score histogram</div>
               </div>
             </div>
             {churnDist.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={churnDist} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <BarChart data={churnDist} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="range" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={46} />
                   <Tooltip />
                   <Bar dataKey="count" fill="#f85149" radius={[2,2,0,0]} />
                 </BarChart>
@@ -121,6 +129,7 @@ export default function Overview() {
 
         {/* Charts row 2 */}
         <div className="grid-2 mb-24">
+          {predictions?.ltv && (
           <div className="card">
             <div className="card-header">
               <div>
@@ -130,30 +139,31 @@ export default function Overview() {
             </div>
             {ltvDist.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={ltvDist} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <BarChart data={ltvDist} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="range" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={40} />
-                  <YAxis tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={46} />
                   <Tooltip />
                   <Bar dataKey="count" fill="#3fb950" radius={[2,2,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : <EmptyState title="No LTV data" />}
           </div>
+          )}
 
           <div className="card">
             <div className="card-header">
               <div>
-                <div className="card-title">Top Churn Predictors</div>
-                <div className="card-subtitle">Feature importance for churn model</div>
+                <div className="card-title">Top {headlineName} Predictors</div>
+                <div className="card-subtitle">Feature importance for the {headlineName.toLowerCase()} model</div>
               </div>
             </div>
             {featureImportance.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={featureImportance.slice(0,8)} layout="vertical" margin={{ top: 4, right: 20, left: 90, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 10 }} />
-                  <YAxis dataKey="feature" type="category" tick={{ fontSize: 10 }} width={90} />
+                  <YAxis dataKey="feature" type="category" tick={{ fontSize: 10 }} width={90} interval={0} />
                   <Tooltip />
                   <Bar dataKey="importance" fill="#388bfd" radius={[0,2,2,0]} />
                 </BarChart>
@@ -176,8 +186,8 @@ export default function Overview() {
                     <th>Label</th>
                     <th>Customers</th>
                     <th>Share</th>
-                    <th>Avg LTV</th>
-                    <th>Churn Risk</th>
+                    <th>{valueLabel}</th>
+                    <th>{riskLabel}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -192,9 +202,9 @@ export default function Overview() {
                       <td>{s.label}</td>
                       <td>{s.size.toLocaleString()}</td>
                       <td>{s.percentage}%</td>
-                      <td>${s.avg_ltv.toLocaleString()}</td>
+                      <td>{valuePrefix}{s.avg_ltv.toLocaleString()}</td>
                       <td>
-                        <span className={`badge ${s.avg_churn_risk > 0.5 ? 'badge-red' : s.avg_churn_risk > 0.3 ? 'badge-yellow' : 'badge-green'}`}>
+                        <span className={`badge ${riskKind !== 'churn' ? 'badge-blue' : s.avg_churn_risk > 0.5 ? 'badge-red' : s.avg_churn_risk > 0.3 ? 'badge-yellow' : 'badge-green'}`}>
                           {(s.avg_churn_risk * 100).toFixed(1)}%
                         </span>
                       </td>

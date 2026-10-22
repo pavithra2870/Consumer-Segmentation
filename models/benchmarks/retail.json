@@ -1,0 +1,250 @@
+{
+  "id": "retail",
+  "label": "Online Retail II (UCI)",
+  "source": "UCI ML Repository #502 (Chen, 2012)",
+  "license": "CC BY 4.0",
+  "description": "824,364 transactions from a UK online retailer (2009-2011), aggregated to 5,281 customers. Features use data before a cutoff; churn and LTV targets come from the 90 days after it.",
+  "rows": 824364,
+  "columns": 7,
+  "tasks": {
+    "churn": {
+      "label": "Churn Prediction",
+      "kind": "classification",
+      "target": "no purchase in next 90d",
+      "positive_rate": 0.566,
+      "baseline_accuracy": 0.566,
+      "n_train": 4224,
+      "n_test": 1057,
+      "n_features": 14,
+      "models": [
+        {
+          "name": "Majority class",
+          "is_ours": false,
+          "auc": 0.5,
+          "auc_ci": [
+            0.5,
+            0.5
+          ],
+          "pr_auc": 0.5658,
+          "f1": 0.7227,
+          "accuracy": 0.5658,
+          "lift_top_decile": 1.0,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Logistic Regression",
+          "is_ours": false,
+          "auc": 0.8085,
+          "auc_ci": [
+            0.7836,
+            0.8327
+          ],
+          "pr_auc": 0.8338,
+          "f1": 0.7818,
+          "accuracy": 0.7455,
+          "lift_top_decile": 1.633,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Random Forest",
+          "is_ours": false,
+          "auc": 0.8127,
+          "auc_ci": [
+            0.786,
+            0.8333
+          ],
+          "pr_auc": 0.8273,
+          "f1": 0.7923,
+          "accuracy": 0.755,
+          "lift_top_decile": 1.599,
+          "train_seconds": 0.5
+        },
+        {
+          "name": "LightGBM",
+          "is_ours": false,
+          "auc": 0.7973,
+          "auc_ci": [
+            0.7709,
+            0.8225
+          ],
+          "pr_auc": 0.8084,
+          "f1": 0.7803,
+          "accuracy": 0.7427,
+          "lift_top_decile": 1.549,
+          "train_seconds": 0.4
+        },
+        {
+          "name": "Gradient Boosting (ours)",
+          "is_ours": true,
+          "auc": 0.8023,
+          "auc_ci": [
+            0.7773,
+            0.8279
+          ],
+          "pr_auc": 0.816,
+          "f1": 0.7798,
+          "accuracy": 0.7398,
+          "lift_top_decile": 1.599,
+          "train_seconds": 2.3
+        }
+      ],
+      "feature_importance": {
+        "purchase_gap_days": 0.2575,
+        "recency_days": 0.2194,
+        "monetary": 0.1041,
+        "n_products": 0.0817,
+        "avg_order_value": 0.0631,
+        "avg_items_per_order": 0.0627,
+        "spend_last_90d": 0.058,
+        "tenure_days": 0.0549,
+        "frequency": 0.037,
+        "return_ratio": 0.0318
+      },
+      "notes": [
+        "Temporal split: features before cutoff, label from the following 90 days.",
+        "Cancellations (invoices starting with C) are treated as returns, not purchases."
+      ]
+    },
+    "ltv": {
+      "label": "LTV Prediction",
+      "kind": "regression",
+      "target": "spend in next 90d",
+      "target_mean": 577.75,
+      "zero_share": 0.566,
+      "n_train": 4224,
+      "n_test": 1057,
+      "n_features": 14,
+      "models": [
+        {
+          "name": "Mean predictor",
+          "is_ours": false,
+          "r2_log": -0.0003,
+          "mae": 694.25,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Ridge",
+          "is_ours": false,
+          "r2_log": 0.312,
+          "mae": 1022.58,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "LightGBM",
+          "is_ours": false,
+          "r2_log": 0.3148,
+          "mae": 579.71,
+          "train_seconds": 0.4
+        },
+        {
+          "name": "Random Forest (ours)",
+          "is_ours": true,
+          "r2_log": 0.3712,
+          "mae": 548.69,
+          "train_seconds": 0.5
+        }
+      ],
+      "feature_importance": {
+        "purchase_gap_days": 0.3283,
+        "monetary": 0.2513,
+        "recency_days": 0.1057,
+        "spend_last_90d": 0.0684,
+        "n_products": 0.0539,
+        "avg_items_per_order": 0.0452,
+        "avg_order_value": 0.0422,
+        "tenure_days": 0.0368,
+        "frequency": 0.0221,
+        "return_ratio": 0.019
+      },
+      "notes": [
+        "Forward-looking target: future spend, not a function of the input features.",
+        "Customers who stop buying contribute 0, so the target is zero-heavy."
+      ]
+    },
+    "segmentation": {
+      "label": "Customer Segmentation",
+      "kind": "segmentation",
+      "n_samples": 5281,
+      "n_features": 6,
+      "k_ours": 6,
+      "methods": [
+        {
+          "name": "Random assignment",
+          "is_ours": false,
+          "silhouette": -0.0169,
+          "davies_bouldin": 76.2261
+        },
+        {
+          "name": "KMeans k=6 (ours)",
+          "is_ours": true,
+          "silhouette": 0.2868,
+          "davies_bouldin": 1.059,
+          "stability_ari": 0.7661
+        },
+        {
+          "name": "Gaussian Mixture k=6",
+          "is_ours": false,
+          "silhouette": 0.0654,
+          "davies_bouldin": 3.0806
+        },
+        {
+          "name": "Agglomerative (Ward) k=6",
+          "is_ours": false,
+          "silhouette": 0.2445,
+          "davies_bouldin": 1.0563
+        }
+      ],
+      "k_sweep": [
+        {
+          "k": 2,
+          "silhouette": 0.355,
+          "davies_bouldin": 1.143
+        },
+        {
+          "k": 3,
+          "silhouette": 0.3079,
+          "davies_bouldin": 1.0932
+        },
+        {
+          "k": 4,
+          "silhouette": 0.3169,
+          "davies_bouldin": 0.9557
+        },
+        {
+          "k": 5,
+          "silhouette": 0.3062,
+          "davies_bouldin": 0.9852
+        },
+        {
+          "k": 6,
+          "silhouette": 0.2868,
+          "davies_bouldin": 1.059
+        },
+        {
+          "k": 7,
+          "silhouette": 0.2667,
+          "davies_bouldin": 1.0942
+        },
+        {
+          "k": 8,
+          "silhouette": 0.271,
+          "davies_bouldin": 1.014
+        }
+      ],
+      "best_k_by_silhouette": 2,
+      "feature_names": [
+        "recency_days",
+        "frequency",
+        "monetary",
+        "avg_order_value",
+        "n_products",
+        "tenure_days"
+      ],
+      "notes": [
+        "Classic RFM plus basket breadth and tenure (log-scaled spend and frequency).",
+        "Silhouette scored on a 10k sample; Agglomerative runs on a 6k subsample."
+      ]
+    }
+  },
+  "generated_at": "2026-10-22T08:12:01+00:00"
+}

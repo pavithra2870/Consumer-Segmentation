@@ -17,8 +17,11 @@ env/
 # Data & Models (large files)
 data/*.csv
 data/*.parquet
+data/*.xlsx
 data/*.json
 models/*.pkl
+models/*/*.pkl
+data/workspaces/
 models/*.joblib
 logs/
 

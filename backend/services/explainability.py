@@ -83,11 +83,14 @@ def compute_explanations(df: pd.DataFrame) -> dict:
     models_path = settings.models_path
     results = {}
 
-    model_specs = [
+    from services.datasets import get_spec
+    all_specs = [
         ("churn", "churn_model.pkl", "churn_features.pkl", "is_churned", "tree"),
         ("ltv", "ltv_model.pkl", "ltv_features.pkl", "ltv_actual", "tree"),
-        ("conversion", "conversion_model.pkl", "conversion_features.pkl", "converted", "linear"),
+        ("conversion", "conversion_model.pkl", "conversion_features.pkl", "converted", "tree"),
     ]
+    tasks = get_spec().tasks
+    model_specs = [m for m in all_specs if m[0] in tasks]
 
     for name, model_file, feat_file, target_col, model_type in model_specs:
         try:

@@ -1,0 +1,197 @@
+{
+  "id": "telco",
+  "label": "Telco Customer Churn (IBM)",
+  "source": "IBM sample dataset (Kaggle: blastchar/telco-customer-churn)",
+  "license": "See the Kaggle dataset page before redistributing",
+  "description": "7,043 telecom customers with contract, services and billing data and a real churn flag.",
+  "rows": 7043,
+  "columns": 21,
+  "tasks": {
+    "churn": {
+      "label": "Churn Prediction",
+      "kind": "classification",
+      "target": "Churn",
+      "positive_rate": 0.2654,
+      "baseline_accuracy": 0.7346,
+      "n_train": 5634,
+      "n_test": 1409,
+      "n_features": 30,
+      "models": [
+        {
+          "name": "Majority class",
+          "is_ours": false,
+          "auc": 0.5,
+          "auc_ci": [
+            0.5,
+            0.5
+          ],
+          "pr_auc": 0.2654,
+          "f1": 0.0,
+          "accuracy": 0.7346,
+          "lift_top_decile": 1.0,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Logistic Regression",
+          "is_ours": false,
+          "auc": 0.8418,
+          "auc_ci": [
+            0.8184,
+            0.8636
+          ],
+          "pr_auc": 0.6324,
+          "f1": 0.6092,
+          "accuracy": 0.807,
+          "lift_top_decile": 2.772,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Random Forest",
+          "is_ours": false,
+          "auc": 0.8432,
+          "auc_ci": [
+            0.8169,
+            0.8654
+          ],
+          "pr_auc": 0.6564,
+          "f1": 0.5937,
+          "accuracy": 0.8077,
+          "lift_top_decile": 2.933,
+          "train_seconds": 0.3
+        },
+        {
+          "name": "LightGBM",
+          "is_ours": false,
+          "auc": 0.8331,
+          "auc_ci": [
+            0.8079,
+            0.854
+          ],
+          "pr_auc": 0.6337,
+          "f1": 0.5776,
+          "accuracy": 0.7913,
+          "lift_top_decile": 2.852,
+          "train_seconds": 0.3
+        },
+        {
+          "name": "Gradient Boosting (ours)",
+          "is_ours": true,
+          "auc": 0.8376,
+          "auc_ci": [
+            0.8134,
+            0.8573
+          ],
+          "pr_auc": 0.6558,
+          "f1": 0.5901,
+          "accuracy": 0.7999,
+          "lift_top_decile": 2.879,
+          "train_seconds": 1.7
+        }
+      ],
+      "feature_importance": {
+        "tenure": 0.2444,
+        "TotalCharges": 0.1604,
+        "InternetService_Fiber optic": 0.1563,
+        "MonthlyCharges": 0.1174,
+        "PaymentMethod_Electronic check": 0.1023,
+        "Contract_Two year": 0.0404,
+        "Contract_One year": 0.0384,
+        "PaperlessBilling_Yes": 0.0203,
+        "OnlineSecurity_Yes": 0.0155,
+        "TechSupport_Yes": 0.0138
+      },
+      "notes": [
+        "Blank TotalCharges (tenure 0) set to 0.",
+        "Categoricals one-hot encoded."
+      ]
+    },
+    "segmentation": {
+      "label": "Customer Segmentation",
+      "kind": "segmentation",
+      "n_samples": 7043,
+      "n_features": 9,
+      "k_ours": 6,
+      "methods": [
+        {
+          "name": "Random assignment",
+          "is_ours": false,
+          "silhouette": -0.01,
+          "davies_bouldin": 79.4469
+        },
+        {
+          "name": "KMeans k=6 (ours)",
+          "is_ours": true,
+          "silhouette": 0.3192,
+          "davies_bouldin": 1.2362,
+          "stability_ari": 0.8167
+        },
+        {
+          "name": "Gaussian Mixture k=6",
+          "is_ours": false,
+          "silhouette": 0.2578,
+          "davies_bouldin": 1.5058
+        },
+        {
+          "name": "Agglomerative (Ward) k=6",
+          "is_ours": false,
+          "silhouette": 0.29,
+          "davies_bouldin": 1.1937
+        }
+      ],
+      "k_sweep": [
+        {
+          "k": 2,
+          "silhouette": 0.2711,
+          "davies_bouldin": 1.4756
+        },
+        {
+          "k": 3,
+          "silhouette": 0.3146,
+          "davies_bouldin": 1.2584
+        },
+        {
+          "k": 4,
+          "silhouette": 0.2981,
+          "davies_bouldin": 1.3456
+        },
+        {
+          "k": 5,
+          "silhouette": 0.3164,
+          "davies_bouldin": 1.1945
+        },
+        {
+          "k": 6,
+          "silhouette": 0.3192,
+          "davies_bouldin": 1.2362
+        },
+        {
+          "k": 7,
+          "silhouette": 0.3306,
+          "davies_bouldin": 1.1893
+        },
+        {
+          "k": 8,
+          "silhouette": 0.3422,
+          "davies_bouldin": 1.1703
+        }
+      ],
+      "best_k_by_silhouette": 8,
+      "feature_names": [
+        "tenure",
+        "MonthlyCharges",
+        "TotalCharges",
+        "SeniorCitizen",
+        "n_services",
+        "has_internet",
+        "fiber",
+        "contract_months",
+        "autopay"
+      ],
+      "notes": [
+        "Clusters on tenure, charges, service count and contract. There is no RFM data.",
+        "Silhouette scored on a 10k sample; Agglomerative runs on a 6k subsample."
+      ]
+    }
+  },
+  "generated_at": "2026-10-22T08:11:02+00:00"
+}

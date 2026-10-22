@@ -67,10 +67,52 @@ def _subscription_mult(subs: np.ndarray) -> np.ndarray:
     return np.vectorize(SUBSCRIPTION_SPEND_MULT.get)(subs)
 
 
+# Latent customer archetypes: (prob, engagement, value, recency) offsets in std-dev units.
+# They give behaviour its own structure, independent of income / subscription tier.
+ARCHETYPES = [
+    (0.15, 1.0, 1.0, 1.0),     # champions
+    (0.25, 0.4, 0.3, 0.5),     # loyal regulars
+    (0.20, 0.3, -0.5, 0.0),    # bargain hunters
+    (0.20, -0.6, 0.2, -1.0),   # at risk
+    (0.20, -1.0, -0.8, -1.2),  # dormant
+]
+
+
+def _generate_latents(n: int, combined: np.ndarray) -> dict:
+    probs = [a[0] for a in ARCHETYPES]
+    offsets = np.array([a[1:] for a in ARCHETYPES])
+    arch = RNG.choice(len(ARCHETYPES), size=n, p=probs)
+    z = offsets[arch] + RNG.normal(0, 0.6, size=(n, 3))
+    tier = combined - 0.5
+    return {
+        "_eng_idx": _clamp(0.5 + 0.18 * z[:, 0] + 0.2 * tier, 0.05, 1.0),
+        "_val_idx": _clamp(0.5 + 0.15 * z[:, 1] + 0.5 * tier, 0.05, 1.2),
+        "_rec_idx": _clamp(0.5 + 0.3 * z[:, 2], 0.0, 1.1),
+    }
+
+
+def _zscore(x: np.ndarray) -> np.ndarray:
+    return (x - x.mean()) / (x.std() + 1e-9)
+
+
+def _calibrated_prob(logit: np.ndarray, target_rate: float) -> np.ndarray:
+    """Shift the logit intercept by bisection so the mean probability hits target_rate."""
+    lo, hi = -15.0, 15.0
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if (1 / (1 + np.exp(-(logit + mid)))).mean() > target_rate:
+            hi = mid
+        else:
+            lo = mid
+    return 1 / (1 + np.exp(-(logit + (lo + hi) / 2)))
+
+
 def _generate_demographics(n: int) -> dict:
     income_brackets = _sample(INCOME_BRACKETS, INCOME_PROBS, n)
     subscription_types = _sample(SUBSCRIPTION_TYPES, SUBSCRIPTION_PROBS, n)
+    latents = _generate_latents(n, (_income_factor(income_brackets) + _subscription_mult(subscription_types)) / 2)
     return {
+        **latents,
         "customer_id": [f"C{i+1:07d}" for i in range(n)],
         "age": _clamp(RNG.integers(18, 81, size=n), 18, 80).astype(int),
         "gender": _sample(["M", "F", "Non-binary"], [0.48, 0.48, 0.04], n),
@@ -90,46 +132,47 @@ def _generate_behavioral(n: int, demo: dict) -> dict:
     inf = demo["_income_factor"]
     smult = demo["_sub_mult"]
     combined = (inf + smult) / 2
+    eng, val, rec = demo["_eng_idx"], demo["_val_idx"], demo["_rec_idx"]
 
     account_age_days = _clamp(
         RNG.integers(30, 1826, size=n), 30, 1825
     ).astype(int)
 
     purchase_count = _clamp(
-        (combined * 80 + RNG.poisson(15, size=n)).astype(int), 1, 500
+        (val * 80 + RNG.poisson(15, size=n)).astype(int), 1, 500
     )
     total_spend = _clamp(
-        combined * 8000 + RNG.exponential(2000, size=n), 5.0, 80000.0
+        val * 8000 + RNG.exponential(2000, size=n), 5.0, 80000.0
     )
     avg_order_value = _clamp(total_spend / purchase_count, 5.0, 1000.0)
 
     last_purchase_days_ago = _clamp(
-        RNG.integers(1, 366, size=n) * (1.5 - combined), 1, 365
+        RNG.integers(1, 366, size=n) * (1.5 - rec), 1, 365
     ).astype(int)
 
     session_count_30d = _clamp(
-        (combined * 60 + RNG.poisson(10, size=n)).astype(int), 0, 200
+        (eng * 60 + RNG.poisson(10, size=n)).astype(int), 0, 200
     )
     avg_session_duration_min = _clamp(
-        combined * 30 + RNG.exponential(8, size=n), 0.5, 90.0
+        eng * 30 + RNG.exponential(8, size=n), 0.5, 90.0
     )
     pages_per_session = _clamp(
-        combined * 12 + RNG.exponential(3, size=n), 1.0, 40.0
+        eng * 12 + RNG.exponential(3, size=n), 1.0, 40.0
     )
 
-    email_open_rate = _clamp(combined * 0.4 + RNG.beta(2, 5, size=n) * 0.3, 0.0, 1.0)
+    email_open_rate = _clamp(eng * 0.4 + RNG.beta(2, 5, size=n) * 0.3, 0.0, 1.0)
     email_click_rate = _clamp(email_open_rate * 0.3 + RNG.beta(1, 8, size=n) * 0.1, 0.0, 1.0)
 
     app_opens_30d = _clamp(
-        (combined * 100 + RNG.poisson(20, size=n)).astype(int), 0, 300
+        (eng * 100 + RNG.poisson(20, size=n)).astype(int), 0, 300
     )
 
     support_tickets = _clamp(
-        RNG.poisson(1.5, size=n) * (1.2 - combined), 0, 25
+        RNG.poisson(1.5, size=n) * (1.2 - eng), 0, 25
     ).astype(int)
 
     nps_score = _clamp(
-        (combined * 6 + 4 + RNG.normal(0, 1.5, size=n)).astype(int), 0, 10
+        (eng * 6 + 4 + RNG.normal(0, 1.5, size=n)).astype(int), 0, 10
     ).astype(int)
 
     purchase_frequency_monthly = _clamp(
@@ -165,31 +208,49 @@ def _generate_labels(n: int, demo: dict, behavioral: dict) -> dict:
         + (1 - _clamp(behavioral["support_tickets"] / 10.0, 0, 1)) * 0.2
     )
 
-    churn_score = (
-        (1 - recency_score) * 0.4
-        + (1 - frequency_score) * 0.3
-        + (1 - engagement_score) * 0.2
-        + (1 - inf) * 0.1
-        + RNG.normal(0, 0.05, size=n)
+    days = behavioral["last_purchase_days_ago"].astype(float)
+
+    # Churn: ~18% base rate. Observable drivers + an unobserved noise term, so the
+    # achievable AUC is bounded well below 1.0.
+    z_days, z_eng = _zscore(days), _zscore(engagement_score)
+    churn_logit = (
+        0.8 * z_days
+        - 0.6 * _zscore(frequency_score)
+        - 0.7 * z_eng
+        + 0.3 * _zscore(behavioral["support_tickets"].astype(float))
+        - 0.3 * _zscore(behavioral["nps_score"].astype(float))
+        - 0.2 * _zscore(inf)
+        + 0.3 * np.maximum(z_days, 0) * np.maximum(-z_eng, 0)
+        + RNG.normal(0, 0.9, size=n)
     )
-    churn_prob = _clamp(churn_score, 0.0, 1.0)
+    churn_prob = _calibrated_prob(churn_logit, 0.18)
     is_churned = (RNG.uniform(0, 1, size=n) < churn_prob).astype(int)
 
+    # LTV: driven by latent value, plan tier, tenure and retention, with heavy
+    # multiplicative noise. Not a formula of the observed spend features.
+    sub_mult = demo["_sub_mult"]
+    tenure_years = behavioral["account_age_days"] / 365.0
     ltv = _clamp(
-        behavioral["total_spend"] * (recency_score + frequency_score)
-        * (1 + inf)
-        + RNG.exponential(500, size=n),
+        3000
+        * (0.3 + demo["_val_idx"])
+        * (0.5 + sub_mult)
+        * (1 + 0.1 * tenure_years)
+        * (1 - 0.6 * churn_prob)
+        * RNG.lognormal(0, 0.45, size=n),
         10.0,
         200000.0,
     )
 
-    conversion_score = (
-        engagement_score * 0.5
-        + frequency_score * 0.3
-        + inf * 0.2
-        + RNG.normal(0, 0.05, size=n)
+    # Conversion: ~15% base rate, same unobserved-noise design.
+    conv_logit = (
+        0.8 * z_eng
+        + 0.5 * _zscore(behavioral["email_click_rate"])
+        + 0.4 * _zscore(behavioral["pages_per_session"])
+        + 0.3 * _zscore(frequency_score)
+        + 0.15 * _zscore(inf)
+        + RNG.normal(0, 0.9, size=n)
     )
-    converted = (RNG.uniform(0, 1, size=n) < _clamp(conversion_score, 0, 1)).astype(int)
+    converted = (RNG.uniform(0, 1, size=n) < _calibrated_prob(conv_logit, 0.15)).astype(int)
 
     return {
         "churn_probability": np.round(churn_prob, 4),
@@ -298,7 +359,7 @@ async def generate_dataset(n: int = None) -> pd.DataFrame:
 
 
 def load_dataset() -> pd.DataFrame:
-    path = settings.data_path / "consumers.csv"
+    path = settings.table_path
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found at {path}. Run /generate-data first.")
     return pd.read_csv(path)

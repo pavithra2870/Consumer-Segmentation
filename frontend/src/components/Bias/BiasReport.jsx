@@ -9,12 +9,11 @@ import {
 export default function BiasReport() {
   const { data, loading, error } = useApi(api.getBiasReport)
 
-  const genderDist = data?.distribution_by_group?.gender
-    ? Object.entries(data.distribution_by_group.gender).map(([k, v]) => ({ name: k, value: v }))
-    : []
-  const incomeDist = data?.distribution_by_group?.income_bracket
-    ? Object.entries(data.distribution_by_group.income_bracket).map(([k, v]) => ({ name: k, value: v }))
-    : []
+  const distributions = Object.entries(data?.distribution_by_group ?? {}).map(([attr, groups]) => ({
+    attr,
+    rows: Object.entries(groups).map(([k, v]) => ({ name: k, value: v })),
+  }))
+  const BAR_COLORS = ['#388bfd', '#d29922', '#3fb950', '#8957e5']
 
   return (
     <>
@@ -95,30 +94,20 @@ export default function BiasReport() {
 
             {/* Distribution charts */}
             <div className="grid-2 mb-24">
-              <div className="card">
-                <div className="card-header"><div className="card-title">Gender Distribution</div></div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={genderDist} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#388bfd" radius={[2,2,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="card">
-                <div className="card-header"><div className="card-title">Income Bracket Distribution</div></div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={incomeDist} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#d29922" radius={[2,2,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {distributions.map(({ attr, rows }, i) => (
+                <div className="card" key={attr}>
+                  <div className="card-header"><div className="card-title">{attr.replace(/_/g, ' ')} distribution</div></div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={rows} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill={BAR_COLORS[i % BAR_COLORS.length]} radius={[2,2,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ))}
             </div>
 
             {/* Recommendations */}

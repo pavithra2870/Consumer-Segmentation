@@ -1,0 +1,202 @@
+{
+  "id": "bank",
+  "label": "Bank Marketing (UCI)",
+  "source": "UCI ML Repository #222 (Moro, Rita & Cortez, 2014)",
+  "license": "CC BY 4.0",
+  "description": "45,211 outbound marketing calls from a Portuguese bank. Target: did the client subscribe to a term deposit.",
+  "rows": 45211,
+  "columns": 17,
+  "tasks": {
+    "conversion": {
+      "label": "Conversion Scoring",
+      "kind": "classification",
+      "target": "y (term deposit)",
+      "positive_rate": 0.117,
+      "baseline_accuracy": 0.883,
+      "n_train": 36168,
+      "n_test": 9043,
+      "n_features": 42,
+      "models": [
+        {
+          "name": "Majority class",
+          "is_ours": false,
+          "auc": 0.5,
+          "auc_ci": [
+            0.5,
+            0.5
+          ],
+          "pr_auc": 0.117,
+          "f1": 0.0,
+          "accuracy": 0.883,
+          "lift_top_decile": 1.0,
+          "train_seconds": 0.0
+        },
+        {
+          "name": "Logistic Regression",
+          "is_ours": false,
+          "auc": 0.7717,
+          "auc_ci": [
+            0.7519,
+            0.7866
+          ],
+          "pr_auc": 0.4109,
+          "f1": 0.2842,
+          "accuracy": 0.8936,
+          "lift_top_decile": 4.217,
+          "train_seconds": 0.1
+        },
+        {
+          "name": "Random Forest",
+          "is_ours": false,
+          "auc": 0.7977,
+          "auc_ci": [
+            0.7815,
+            0.813
+          ],
+          "pr_auc": 0.4429,
+          "f1": 0.2766,
+          "accuracy": 0.8947,
+          "lift_top_decile": 4.236,
+          "train_seconds": 1.0
+        },
+        {
+          "name": "LightGBM",
+          "is_ours": false,
+          "auc": 0.8053,
+          "auc_ci": [
+            0.7866,
+            0.8208
+          ],
+          "pr_auc": 0.4625,
+          "f1": 0.3611,
+          "accuracy": 0.8955,
+          "lift_top_decile": 4.397,
+          "train_seconds": 0.6
+        },
+        {
+          "name": "Gradient Boosting (ours)",
+          "is_ours": true,
+          "auc": 0.8024,
+          "auc_ci": [
+            0.7843,
+            0.8174
+          ],
+          "pr_auc": 0.4577,
+          "f1": 0.347,
+          "accuracy": 0.8964,
+          "lift_top_decile": 4.463,
+          "train_seconds": 11.2
+        }
+      ],
+      "feature_importance": {
+        "poutcome_success": 0.3684,
+        "age": 0.0944,
+        "day": 0.0739,
+        "pdays": 0.0702,
+        "contact_unknown": 0.0594,
+        "month_mar": 0.0442,
+        "balance": 0.0399,
+        "housing_yes": 0.0399,
+        "month_oct": 0.0365,
+        "month_jun": 0.0321
+      },
+      "notes": [
+        "`duration` dropped: it is only known after the call, so it leaks the outcome.",
+        "pdays = -1 recoded to 0 plus a previously_contacted flag."
+      ],
+      "leakage_check": {
+        "label": "LightGBM with `duration` included",
+        "auc": 0.9349,
+        "note": "Call duration is only known after the call, so this score is unrealistically high."
+      }
+    },
+    "segmentation": {
+      "label": "Customer Segmentation",
+      "kind": "segmentation",
+      "n_samples": 45211,
+      "n_features": 9,
+      "k_ours": 6,
+      "methods": [
+        {
+          "name": "Random assignment",
+          "is_ours": false,
+          "silhouette": -0.0113,
+          "davies_bouldin": 68.8939
+        },
+        {
+          "name": "KMeans k=6 (ours)",
+          "is_ours": true,
+          "silhouette": 0.2396,
+          "davies_bouldin": 1.2915,
+          "stability_ari": 0.8671
+        },
+        {
+          "name": "Gaussian Mixture k=6",
+          "is_ours": false,
+          "silhouette": 0.1984,
+          "davies_bouldin": 1.8372
+        },
+        {
+          "name": "Agglomerative (Ward) k=6",
+          "is_ours": false,
+          "silhouette": 0.1822,
+          "davies_bouldin": 1.4364
+        }
+      ],
+      "k_sweep": [
+        {
+          "k": 2,
+          "silhouette": 0.1772,
+          "davies_bouldin": 2.1929
+        },
+        {
+          "k": 3,
+          "silhouette": 0.1918,
+          "davies_bouldin": 1.616
+        },
+        {
+          "k": 4,
+          "silhouette": 0.2254,
+          "davies_bouldin": 1.49
+        },
+        {
+          "k": 5,
+          "silhouette": 0.2299,
+          "davies_bouldin": 1.3998
+        },
+        {
+          "k": 6,
+          "silhouette": 0.2396,
+          "davies_bouldin": 1.2915
+        },
+        {
+          "k": 7,
+          "silhouette": 0.2463,
+          "davies_bouldin": 1.1882
+        },
+        {
+          "k": 8,
+          "silhouette": 0.2525,
+          "davies_bouldin": 1.1369
+        }
+      ],
+      "best_k_by_silhouette": 8,
+      "feature_names": [
+        "age",
+        "balance",
+        "has_housing_loan",
+        "has_personal_loan",
+        "in_default",
+        "education",
+        "married",
+        "campaign",
+        "previous"
+      ],
+      "notes": [
+        "Demographic and financial profile only. There is no behavioural data.",
+        "Silhouette scored on a 10k sample; Agglomerative runs on a 6k subsample."
+      ]
+    }
+  },
+  "generated_at": "2026-10-22T08:11:48+00:00"
+}

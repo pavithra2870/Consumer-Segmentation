@@ -1,0 +1,1 @@
+{"churn": {"accuracy": 0.8526, "auc": 0.8396, "avg_precision": 0.5887, "baseline_accuracy": 0.8191, "base_rate": 0.1809}, "conversion": {"accuracy": 0.8611, "auc": 0.8071, "avg_precision": 0.4511, "baseline_accuracy": 0.852, "base_rate": 0.148}, "ltv": {"ltv_median": 2374.3, "r2_score": 0.6091}}

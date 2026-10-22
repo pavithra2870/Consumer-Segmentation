@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useDataset } from '../../hooks/DatasetContext'
 
 const NAV = [
   {
@@ -16,6 +17,7 @@ const NAV = [
       { to: '/explainability', label: 'Explainability', icon: <LightbulbIcon /> },
       { to: '/bias', label: 'Fairness Audit', icon: <ShieldIcon /> },
       { to: '/simulation', label: 'What-If Simulator', icon: <SimIcon /> },
+      { to: '/benchmarks', label: 'Benchmarks', icon: <BenchIcon /> },
     ],
   },
   {
@@ -27,6 +29,7 @@ const NAV = [
 ]
 
 export default function Sidebar({ health }) {
+  const { dataset, setDataset, datasets, current } = useDataset()
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -34,11 +37,23 @@ export default function Sidebar({ health }) {
         <div className="sidebar-logo-sub">Intelligence Platform</div>
       </div>
 
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div className="sidebar-section-label" style={{ padding: 0, marginBottom: 6 }}>Dataset</div>
+        <select className="form-select" value={dataset} onChange={(e) => setDataset(e.target.value)} style={{ width: '100%' }}>
+          {datasets.length === 0 && <option value={dataset}>{dataset}</option>}
+          {datasets.map((d) => (
+            <option key={d.id} value={d.id} disabled={!d.files_present}>
+              {d.label}{!d.files_present ? ' (file missing)' : !d.models_ready ? ' (not trained)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <nav className="sidebar-nav">
         {NAV.map(({ section, items }) => (
           <div key={section}>
             <div className="sidebar-section-label">{section}</div>
-            {items.map(({ to, label, icon }) => (
+            {items.filter(({ to }) => to !== '/bias' || current?.has_fairness !== false).map(({ to, label, icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -124,6 +139,14 @@ function SimIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M3 8h10M8 3v10"/><circle cx="8" cy="8" r="2"/>
+    </svg>
+  )
+}
+
+function BenchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 14V8M6 14V3M10 14V6M14 14V10"/>
     </svg>
   )
 }

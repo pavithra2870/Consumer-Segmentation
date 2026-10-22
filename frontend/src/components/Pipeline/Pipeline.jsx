@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Header from '../Layout/Header'
 import { api } from '../../services/api'
+import { useDataset } from '../../hooks/DatasetContext'
 
 const STEPS = [
   { id: 'generate', label: 'Generate Dataset', description: '100k+ synthetic consumer records', endpoint: 'data' },
@@ -8,6 +9,8 @@ const STEPS = [
 ]
 
 export default function Pipeline() {
+  const { dataset, current, refresh } = useDataset()
+  const isSynthetic = dataset === 'synthetic'
   const [health, setHealth] = useState(null)
   const [dataStatus, setDataStatus] = useState(null)
   const [trainStatus, setTrainStatus] = useState(null)
@@ -40,6 +43,7 @@ export default function Pipeline() {
 
         if (h.data_ready) {
           try { const di = await api.getDataInfo(); setDataInfo(di) } catch {}
+          refresh()
         }
       } catch {}
       if (active) setTimeout(poll, 3000)
@@ -72,7 +76,8 @@ export default function Pipeline() {
     }
   }
 
-  const dataReady = health?.data_ready
+  const dataReady = isSynthetic ? health?.data_ready : true
+  const tableReady = health?.data_ready
   const modelsReady = health?.models_ready
 
   const dataRunning = dataStatus?.status === 'running'
@@ -82,7 +87,7 @@ export default function Pipeline() {
     <>
       <Header
         title="Data Pipeline"
-        subtitle="Generate data and train all models end-to-end"
+        subtitle={isSynthetic ? 'Generate data and train all models end-to-end' : `Build features from ${current?.label ?? dataset} and train its models`}
       />
       <div className="page-body">
         {/* System status */}
@@ -95,15 +100,15 @@ export default function Pipeline() {
           />
           <StatusCard
             label="Dataset"
-            status={dataReady ? 'ok' : 'pending'}
-            value={dataReady ? `${dataInfo?.rows?.toLocaleString() ?? '?'} rows` : 'Not generated'}
-            detail={dataReady ? `${dataInfo?.columns ?? '?'} features · ${dataInfo?.size_mb ?? '?'} MB` : 'Run Step 1'}
+            status={tableReady ? 'ok' : 'pending'}
+            value={tableReady ? `${dataInfo?.rows?.toLocaleString() ?? '?'} rows` : (isSynthetic ? 'Not generated' : 'Built on training')}
+            detail={tableReady ? `${dataInfo?.columns ?? '?'} features · ${dataInfo?.size_mb ?? '?'} MB` : (isSynthetic ? 'Run Step 1' : 'Run Train Models')}
           />
           <StatusCard
             label="Models"
             status={modelsReady ? 'ok' : 'pending'}
             value={modelsReady ? 'All trained' : 'Not trained'}
-            detail={modelsReady ? 'Segmentation + Predictions' : 'Run Step 2'}
+            detail={modelsReady ? 'Segmentation + Predictions' : (isSynthetic ? 'Run Step 2' : 'Run Train Models')}
           />
         </div>
 
@@ -111,6 +116,18 @@ export default function Pipeline() {
           {/* Step controls */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Step 1 */}
+            {!isSynthetic && (
+              <div className="card">
+                <div className="card-title mb-16">Source Data</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  <p style={{ margin: '0 0 8px' }}>{current?.description}</p>
+                  <div>Source: {current?.source}</div>
+                  <div>License: {current?.license}</div>
+                  <div>Tasks: {(current?.tasks ?? []).join(', ')}</div>
+                </div>
+              </div>
+            )}
+            {isSynthetic && (
             <div className="card">
               <div className="flex items-center gap-12 mb-16">
                 <PipelineStepBadge num={1} done={dataReady} running={dataRunning} />
@@ -157,11 +174,12 @@ export default function Pipeline() {
                 )}
               </button>
             </div>
+            )}
 
             {/* Step 2 */}
-            <div className="card" style={{ opacity: dataReady ? 1 : 0.6 }}>
+            <div className="card" style={{ opacity: dataReady || !isSynthetic ? 1 : 0.6 }}>
               <div className="flex items-center gap-12 mb-16">
-                <PipelineStepBadge num={2} done={modelsReady} running={trainRunning} />
+                <PipelineStepBadge num={isSynthetic ? 2 : 1} done={modelsReady} running={trainRunning} />
                 <div>
                   <div className="card-title">Train Models</div>
                   <div className="card-subtitle">Feature engineering → segmentation → churn / LTV / conversion models</div>
@@ -204,7 +222,7 @@ export default function Pipeline() {
                 className="btn btn-primary"
                 style={{ width: '100%' }}
                 onClick={handleTrain}
-                disabled={!dataReady || trainRunning}
+                disabled={(isSynthetic && !tableReady) || trainRunning}
               >
                 {trainRunning ? (
                   <><span className="spinner" style={{ width: 14, height: 14 }} /> Training...</>
@@ -220,9 +238,9 @@ export default function Pipeline() {
                 <div className="card-title mb-16">Training Results</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <ResultRow label="Segmentation Silhouette" value={trainStatus.segmentation?.silhouette_score?.toFixed(4)} />
-                  <ResultRow label="Churn Model Accuracy" value={trainStatus.predictions?.churn_accuracy ? `${(trainStatus.predictions.churn_accuracy * 100).toFixed(1)}%` : '--'} />
-                  <ResultRow label="LTV Model R²" value={trainStatus.predictions?.ltv_r2?.toFixed(4)} />
-                  <ResultRow label="Conversion Accuracy" value={trainStatus.predictions?.conversion_accuracy ? `${(trainStatus.predictions.conversion_accuracy * 100).toFixed(1)}%` : '--'} />
+                  {trainStatus.predictions?.churn !== undefined && <ResultRow label="Churn Model AUC" value={trainStatus.predictions.churn.toFixed(4)} />}
+                  {trainStatus.predictions?.ltv !== undefined && <ResultRow label="Value Model R² (log)" value={trainStatus.predictions.ltv.toFixed(4)} />}
+                  {trainStatus.predictions?.conversion !== undefined && <ResultRow label="Conversion Model AUC" value={trainStatus.predictions.conversion.toFixed(4)} />}
                 </div>
               </div>
             )}

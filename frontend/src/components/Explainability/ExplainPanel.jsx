@@ -13,7 +13,9 @@ const MODEL_LABELS = { churn: 'Churn Prediction', ltv: 'LTV Regression', convers
 
 export default function ExplainPanel() {
   const { data, loading, error } = useApi(api.getExplanations)
-  const [activeModel, setActiveModel] = useState('churn')
+  const [selectedModel, setActiveModel] = useState('churn')
+  const available = data ? MODELS.filter((m) => data[m]) : []
+  const activeModel = available.includes(selectedModel) ? selectedModel : available[0]
 
   const current = data?.[activeModel]
 
@@ -29,7 +31,7 @@ export default function ExplainPanel() {
         {data && (
           <>
             <div className="tab-bar mb-24" style={{ marginBottom: 0 }}>
-              {MODELS.map(m => (
+              {available.map(m => (
                 <button key={m} className={`tab-item${activeModel === m ? ' active' : ''}`} onClick={() => setActiveModel(m)}>
                   {MODEL_LABELS[m]}
                 </button>

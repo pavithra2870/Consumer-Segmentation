@@ -1,50 +1,28 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Header from '../Layout/Header'
+import LoadingSpinner from '../Common/LoadingSpinner'
 import { api } from '../../services/api'
 
-const DEFAULT_FEATURES = {
-  rfm_recency: 0.5,
-  rfm_frequency: 2.0,
-  rfm_monetary: 8.0,
-  rfm_score: 0.5,
-  engagement_score: 0.4,
-  support_burden: 0.05,
-  session_quality_score: 0.5,
-  last_purchase_days_ago: 60,
-  nps_score: 7,
-  email_open_rate: 0.25,
-  app_opens_30d: 30,
-  support_tickets: 2,
-  total_spend: 1500,
-  avg_order_value: 85,
-  purchase_frequency_monthly: 2.5,
-  account_age_days: 365,
-  session_count_30d: 20,
-  digital_activity_score: 5.0,
-  subscription_type_enc: 1,
-  income_bracket_enc: 1,
-  email_click_rate: 0.08,
-  pages_per_session: 6.0,
-}
-
-const SLIDER_CONFIG = [
-  { key: 'rfm_recency', label: 'RFM Recency Score', min: 0, max: 1, step: 0.01 },
-  { key: 'rfm_frequency', label: 'RFM Frequency (log)', min: 0, max: 4, step: 0.1 },
-  { key: 'engagement_score', label: 'Engagement Score', min: 0, max: 1, step: 0.01 },
-  { key: 'email_open_rate', label: 'Email Open Rate', min: 0, max: 1, step: 0.01 },
-  { key: 'nps_score', label: 'NPS Score', min: 0, max: 10, step: 1 },
-  { key: 'last_purchase_days_ago', label: 'Days Since Last Purchase', min: 1, max: 365, step: 1 },
-  { key: 'support_tickets', label: 'Support Tickets', min: 0, max: 20, step: 1 },
-  { key: 'session_count_30d', label: 'Sessions (30d)', min: 0, max: 200, step: 1 },
-  { key: 'app_opens_30d', label: 'App Opens (30d)', min: 0, max: 300, step: 1 },
-  { key: 'total_spend', label: 'Total Spend ($)', min: 10, max: 50000, step: 50 },
-]
-
 export default function WhatIfTool() {
-  const [features, setFeatures] = useState({ ...DEFAULT_FEATURES })
+  const [sliders, setSliders] = useState([])
+  const [meta, setMeta] = useState(null)
+  const [features, setFeatures] = useState({})
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [schemaLoading, setSchemaLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Sliders are the most influential features for this dataset, with ranges taken from its data
+  useEffect(() => {
+    api.getWhatIfSchema()
+      .then((s) => {
+        setSliders(s.sliders)
+        setMeta(s.meta)
+        setFeatures(Object.fromEntries(s.sliders.map((x) => [x.key, x.default])))
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setSchemaLoading(false))
+  }, [])
 
   const handleChange = (key, value) => {
     setFeatures(prev => ({ ...prev, [key]: parseFloat(value) }))
@@ -64,7 +42,7 @@ export default function WhatIfTool() {
   }
 
   const handleReset = () => {
-    setFeatures({ ...DEFAULT_FEATURES })
+    setFeatures(Object.fromEntries(sliders.map((x) => [x.key, x.default])))
     setResult(null)
   }
 
@@ -83,7 +61,8 @@ export default function WhatIfTool() {
               <button className="btn btn-secondary btn-sm" onClick={handleReset}>Reset</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {SLIDER_CONFIG.map(({ key, label, min, max, step }) => (
+              {schemaLoading && <LoadingSpinner message="Loading feature ranges..." />}
+              {sliders.map(({ key, label, min, max, step }) => (
                 <div key={key}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <label className="form-label" style={{ marginBottom: 0 }}>{label}</label>
@@ -130,33 +109,37 @@ export default function WhatIfTool() {
             )}
             {result && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <ResultMetric
-                    label="Churn Probability"
-                    value={`${(result.churn_probability * 100).toFixed(1)}%`}
-                    color={result.churn_probability > 0.5 ? '#f85149' : result.churn_probability > 0.3 ? '#d29922' : '#3fb950'}
-                    description={result.churn_probability > 0.5 ? 'High Risk' : result.churn_probability > 0.3 ? 'Medium Risk' : 'Low Risk'}
-                  />
-                  <ResultMetric
-                    label="LTV Estimate"
-                    value={`$${Number(result.ltv_estimate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-                    color="#3fb950"
-                    description="Lifetime Value"
-                  />
-                  <ResultMetric
-                    label="Conversion Score"
-                    value={`${(result.conversion_probability * 100).toFixed(1)}%`}
-                    color={result.conversion_probability > 0.5 ? '#3fb950' : result.conversion_probability > 0.3 ? '#d29922' : '#388bfd'}
-                    description={result.conversion_probability > 0.5 ? 'High Likelihood' : 'Moderate'}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${[result.churn_probability, result.ltv_estimate, result.conversion_probability].filter((v) => v !== undefined).length}, 1fr)`, gap: 12, marginBottom: 16 }}>
+                  {result.churn_probability !== undefined && (
+                    <ResultMetric
+                      label="Churn Probability"
+                      value={`${(result.churn_probability * 100).toFixed(1)}%`}
+                      color={riskColor(result.churn_probability, result.base_rates?.churn, true)}
+                      description={`Average ${(result.base_rates.churn * 100).toFixed(0)}%`}
+                    />
+                  )}
+                  {result.ltv_estimate !== undefined && (
+                    <ResultMetric
+                      label={`${meta?.value_label ?? 'LTV'} Estimate`}
+                      value={`${meta?.value_prefix ?? '$'}${Number(result.ltv_estimate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                      color="#3fb950"
+                      description="Model estimate"
+                    />
+                  )}
+                  {result.conversion_probability !== undefined && (
+                    <ResultMetric
+                      label="Conversion Score"
+                      value={`${(result.conversion_probability * 100).toFixed(1)}%`}
+                      color={riskColor(result.conversion_probability, result.base_rates?.conversion, false)}
+                      description={`Average ${(result.base_rates.conversion * 100).toFixed(0)}%`}
+                    />
+                  )}
                 </div>
 
-                {/* Gauge-style visualisation */}
                 <div className="card mb-12">
                   <div className="card-title mb-16">Risk & Opportunity Summary</div>
-                  <GaugeMeter label="Churn Risk" value={result.churn_probability} color="#f85149" />
-                  <GaugeMeter label="Conversion Opportunity" value={result.conversion_probability} color="#3fb950" />
-                  <GaugeMeter label="LTV Percentile (est.)" value={Math.min(result.ltv_estimate / 30000, 1)} color="#388bfd" />
+                  {result.churn_probability !== undefined && <GaugeMeter label="Churn Risk" value={result.churn_probability} color="#f85149" />}
+                  {result.conversion_probability !== undefined && <GaugeMeter label="Conversion Opportunity" value={result.conversion_probability} color="#3fb950" />}
                 </div>
 
                 <div className="card">
@@ -175,6 +158,14 @@ export default function WhatIfTool() {
       </div>
     </>
   )
+}
+
+// Colour relative to the dataset's own average rate instead of fixed thresholds
+function riskColor(value, base, higherIsWorse) {
+  const ratio = base ? value / base : 1
+  const bad = higherIsWorse ? ratio > 1.5 : ratio < 0.75
+  const good = higherIsWorse ? ratio < 0.75 : ratio > 1.5
+  return bad ? '#f85149' : good ? '#3fb950' : '#d29922'
 }
 
 function ResultMetric({ label, value, color, description }) {
